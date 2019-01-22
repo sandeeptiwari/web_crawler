@@ -1,6 +1,7 @@
 package in.co.techiesandeep.web_crawler.service;
 
 import in.co.techiesandeep.web_crawler.model.Page;
+import in.co.techiesandeep.web_crawler.utils.AppUtil;
 import in.co.techiesandeep.web_crawler.utils.Constant;
 import org.apache.commons.lang3.StringUtils;
 import org.jsoup.Jsoup;
@@ -20,39 +21,63 @@ public class GetPageLinkServiceImpl implements GetPageLinkService {
     private Logger logger = LoggerFactory.getLogger(GetPageLinkServiceImpl.class);
 
     private Set<Page> pages = new LinkedHashSet<>();
-    private Queue<Page> queue = new LinkedList<>();
-    public static final int THREAD_COUNT = 5;
-    private static final long PAUSE_TIME = 5000;
-    private List<Future<Page>> futures = new ArrayList<>();
-    private ExecutorService executor = Executors.newFixedThreadPool(THREAD_COUNT);
+    private LinkedBlockingQueue<Page> queue = new LinkedBlockingQueue<>();
+    private CyclicBarrier barrier = new CyclicBarrier(2);
+    private ExecutorService executor = null;
 
 
     @Override
-    public Set<Page> getPage() throws IOException, ExecutionException, InterruptedException {
+    public Map<String, List<Page>> getPage() throws IOException, ExecutionException, InterruptedException {
         Page page = new Page("Home", Constant.GET_URL, "");
+
+        executor = Executors.newCachedThreadPool();
+
         submitNewPage(page);
         init();
-        return pages;
+        Map<String, List<Page>> pageMap = pages.stream().filter(p -> p != null).collect(Collectors.groupingBy(p -> p.getPageName()));
+
+        logger.info("final result ===> " + pageMap);
+        return pageMap;
     }
 
     private Set<Page> init() {
-        synchronized (this){
-            while (!queue.isEmpty()) {
-                Page currentNode = queue.poll();
-                logger.info("===> "+currentNode.getPageName());
 
-                if (isCompleteUrl(currentNode.getPageLink()))
-                    continue;
+        while (!queue.isEmpty()) {
+            Page currentNode = null;
+            try {
+                currentNode = queue.take();
+            } catch (InterruptedException e) {
+                logger.error("Service ==> " + e.getMessage());
+            }
+            logger.info("===> " + currentNode.getPageName());
 
+            if ((currentNode != null && AppUtil.isCompleteUrl(currentNode.getPageLink())) ||
+                    !AppUtil.shouldConsider(pages, currentNode)) {
+                continue;
+            }
+            try {
                 submitNewPage(currentNode);
+
+                if (queue.isEmpty()) {
+                    int party = barrier.await();
+                    logger.info("Parties reached " + party);
+                }
+            } catch (BrokenBarrierException | InterruptedException e) {
+                logger.error("Service ==> " + e.getMessage());
             }
         }
 
+        executor.shutdown();
+        try {
+            executor.awaitTermination(Long.MAX_VALUE, TimeUnit.NANOSECONDS);
+        } catch (InterruptedException e) {
+            logger.error("Service ==> " + e.getMessage());
+        }
         return pages;
     }
 
     private void submitNewPage(Page page) {
-        if (!shouldVisit(page)) {
+        if (AppUtil.shouldConsider(pages, page)) {
             PageCrawlerTask task = new PageCrawlerTask(page.getPageLink(), page.getPageName(), page.getBaseUrl());
             try {
                 Future<Page> future = executor.submit(task);
@@ -77,11 +102,9 @@ public class GetPageLinkServiceImpl implements GetPageLinkService {
         }
 
         public Page run() {
-            System.out.print("execute ==========>  ");
-
             Page page = new Page(pageName, url, baseUrl);
             page.setVisited(true);
-            if (!isCompleteUrl(url)) {
+            if (!AppUtil.isCompleteUrl(url)) {
                 url = url.substring(1);
                 url = baseUrl + url;
             }
@@ -95,7 +118,7 @@ public class GetPageLinkServiceImpl implements GetPageLinkService {
                 pages.add(page);
 
             } catch (IOException e) {
-                e.printStackTrace();
+                logger.error("page skip ==> "+e.getMessage());
             }
             return page;
         }
@@ -123,12 +146,5 @@ public class GetPageLinkServiceImpl implements GetPageLinkService {
                 }).collect(Collectors.toSet());
     }
 
-    private boolean shouldVisit(Page page) {
-        return pages.contains(page);
-    }
-
-    private boolean isCompleteUrl(String urlString) {
-        return urlString.indexOf("http://") == 0 || urlString.indexOf("https://") == 0;
-    }
 
 }

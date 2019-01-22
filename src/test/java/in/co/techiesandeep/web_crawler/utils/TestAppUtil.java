@@ -1,15 +1,13 @@
 package in.co.techiesandeep.web_crawler.utils;
 
-import in.co.techiesandeep.web_crawler.model.Page;
-import org.junit.Assert;
 import org.junit.Test;
 
-public class TestApiUtil {
+public class TestAppUtil {
 
 
     @Test
     public void apiShoudldReturnResponseCodeOk(){
-        ApiUtil util = new ApiUtil();
+        AppUtil util = new AppUtil();
         //Page page = util.fetchPageSource();
         //Assert.assertTrue(page.getResponseCode() == 200);
     }

@@ -70,4 +70,14 @@ public class Page {
     public int hashCode() {
         return Objects.hash(pageName, pageLink);
     }
+
+    @Override
+    public String toString() {
+        return "Page{" +
+                "pageName='" + pageName + '\'' +
+                ", pageLink='" + pageLink + '\'' +
+                ", isVisited=" + isVisited +
+                ", childrenSet=" + childrenSet +
+                '}';
+    }
 }
