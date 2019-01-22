@@ -7,6 +7,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.junit4.SpringRunner;
 
 import java.io.IOException;
+import java.util.concurrent.ExecutionException;
 
 @RunWith(SpringRunner.class)
 @SpringBootTest
@@ -21,7 +22,10 @@ public class TestGetPageLinkService {
             getPageLinkService.getPage();
         } catch (IOException e) {
 
-
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        } catch (ExecutionException e) {
+            e.printStackTrace();
         }
     }
 }
